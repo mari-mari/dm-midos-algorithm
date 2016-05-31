@@ -36,7 +36,6 @@ public class MidosAlgorithm {
 			this.numberOfInstances = Integer.parseInt(params[0]);
 			this.numberOfAttributes = Integer.parseInt(params[1]);
 			this.numberOfInterestingSubGroups = Integer.parseInt(params[2]);
-			System.out.println("K: " + this.numberOfInterestingSubGroups);
 			this.functionChoice = Integer.parseInt(params[3]);
 			data = new int[this.numberOfInstances][this.numberOfAttributes + 1];
 			for (int i = 0; i < data.length; i++) {
@@ -48,15 +47,19 @@ public class MidosAlgorithm {
 			System.out.println("File does not exist!");
 		}
 	}
+	
+	/*Refinement operator: builds prefix tree.
+	 *New hypothesis is obtained by adding one more attribute to old hypothesis
+	 *Note that attributes are ordered*/
 
 	private LinkedList<Hypothesis> refine(Hypothesis hypo) {
 		LinkedList<Hypothesis> refinedHypos = new LinkedList<>();
-		if (hypo.getAttributes().length == 0) // if root h0 = {}
+		if (hypo.getAttributes().length == 0) // if root (h0 = {} - hypothesis that does not contain any attribute)
 			for (int i = 0; i < this.numberOfAttributes; i++) {
 				int[] newHypo = { i }; // create child hypo of h0 for each attribute
 				refinedHypos.add(new Hypothesis(newHypo));
 			}
-		else {
+		else {//if not root, add attribute that is higher by oredering to existing attributes in hypothesis
 			for (int i = hypo.getAttributes()[hypo.getAttributes().length - 1] + 1; i < this.numberOfAttributes; i++) {
 				int[] newHypo = Arrays.copyOf(hypo.getAttributes(), hypo.getAttributes().length + 1);
 				newHypo[newHypo.length - 1] = i;
@@ -65,6 +68,8 @@ public class MidosAlgorithm {
 		}
 		return refinedHypos;
 	}
+	
+	/*Helper function, checks, whether an instance satisfies a hypothesis*/
 
 	private boolean contains(Hypothesis h, int[] instance) {
 		int count = 0;
@@ -75,6 +80,8 @@ public class MidosAlgorithm {
 		}
 		return count == h.getAttributes().length;
 	}
+	
+	/*Calculates extention size - number of instances that satisfy a hypothesis*/
 
 	private double extensionSize(Hypothesis hypo) {
 		double count = 0.0;
@@ -83,6 +90,8 @@ public class MidosAlgorithm {
 				count++;
 		return count;
 	}
+	
+	/*Calculates extention(+) with certain label size (here positives) - number of instances that satisfy a hypothesis, and have class "1" */
 
 	private double extentionLabeledSize(Hypothesis hypo) {
 		double count = 0.0;
@@ -91,6 +100,8 @@ public class MidosAlgorithm {
 				count++;
 		return count;
 	}
+	
+	/*Calculates number of certain class (here positives) instances within the whole population*/
 
 	private double populationLabeledSize() {
 		double count = 0.0;
@@ -99,6 +110,8 @@ public class MidosAlgorithm {
 				count++;
 		return count;
 	}
+	
+	/*Calculates the value of quality/interestingness function depending on function choice*/
 
 	private double calculateQuality(int functionChoice, Hypothesis hypo) {
 		double g = extensionSize(hypo) / this.numberOfInstances;
@@ -113,44 +126,63 @@ public class MidosAlgorithm {
 		}
 		return 0.0;
 	}
+	
+	/*Calculates optimistic estimate of a hypothesis, usefull for pruning*/
 
 	private double optimisticEstimate(Hypothesis hypo) {
 		double g = extensionSize(hypo) / this.numberOfInstances;
 		double p0 = populationLabeledSize() / this.numberOfInstances;
 		return Math.sqrt(g) * Math.max(p0,(1 - p0));
 	}
+	
+	/*MIDOS algorithm*/
 
 	public PriorityQueue<Hypothesis> runAlgorithm() {
+		//set root as empty hypothesis
 		int[] noneOfAttributes = {};
 		Hypothesis root = new Hypothesis(noneOfAttributes);
 		root.setQuality(calculateQuality(this.functionChoice, root));
+		//add to the population of hypothesises
 		hypothesis.add(root);
-		
+		//whyle population of hypothesises is not empty
 		while (!hypothesis.isEmpty()) {
 			double min = Double.MIN_VALUE;
 			if (!solutions.isEmpty())
 				min = solutions.peek().getQuality();
+				//take hypothesis from population of hypothesis and refine it
 			Hypothesis hypo = hypothesis.removeFirst();
+			//for each hypothesis h' from set of refinement of initial hypothesis
 			for (Hypothesis h : refine(hypo)) {
+				//calculate interestingness
 				double quality = calculateQuality(this.functionChoice, h);
 				h.setQuality(quality);
+				//if optimistic estimate of h' is smaller than quality of worst hypothesis in solutions
 				if (optimisticEstimate(h) < min)
+				//prune(do not explore this branch anymore)
 					continue;
-				else {
+				else {//otherwise if Solutions's size is less than desired
+					//add h' to the Solutions
 					if (solutions.size() < this.numberOfInterestingSubGroups) {
 						solutions.add(h);
-					} else {
+					}
+					//if not, check if h' is more interesting than worst h in Solutions
+					//if yes, remove worst, add h' 
+					else {
 						if (quality > solutions.peek().getQuality()) {
 							solutions.remove();
 							solutions.add(h);
 						}
 					}
+					//add h' to the population of hypothesises
 					hypothesis.add(h);
 				}
 			}
 		}
+		//return desired amount of the most interesting hypothesises 
 		return solutions;
 	}
+	
+	/*Calculates significance of hypothesis*/
 
 	private double calculateSignificance(Hypothesis hypo) {
 		double n = extensionSize(hypo);
@@ -158,10 +190,14 @@ public class MidosAlgorithm {
 		double p = extentionLabeledSize(hypo) / extensionSize(hypo);
 		return (p - p0) / (Math.sqrt(p0 * (1 - p0) / n));
 	}
+	
+	/*Checks if hypo's significance is within defined significance interval Zn*/
 
 	private boolean isSignificant(Hypothesis hypo) {
 		return Math.abs(calculateSignificance(hypo)) < Zn;
 	}
+	
+	/*Writes set of the most interesting hypothesises to file*/
 	
 	public void writeToFile(String fileName){
 		try(PrintWriter pw = new PrintWriter(fileName)){
