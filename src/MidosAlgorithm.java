@@ -24,6 +24,10 @@ public class MidosAlgorithm {
 		solutions = new PriorityQueue<>();
 		hypothesis = new LinkedList<>();
 	}
+	
+	/*Reads data as required in the task:
+	 *first line of file contains parameters
+	 *next lines contain binary attribute values*/
 
 	private void readData(String file) {
 
